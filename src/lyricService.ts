@@ -23,7 +23,7 @@ export type FetchResult =
 
 // Result type for the main search function
 export type SearchResult =
-  | { found: true; id: string; format: LyricFormat; source: 'repository' | 'external'; content: string }
+  | { found: true; id: string; format: LyricFormat; source: 'repository' | 'external'; content: string; translation?: string; romaji?: string }
   | { found: false; id: string; error: string; statusCode?: number };
 
 // Environment variable (should be passed in or handled differently in a real service)
@@ -62,7 +62,7 @@ async function fetchExternalLyric(
   id: string,
   specificFormat: 'yrc' | 'lrc' | undefined, // Undefined means try both based on API response
   logger: BasicLogger
-): Promise<FetchResult> {
+): Promise<FetchResult & { translation?: string; romaji?: string }> {
   const externalUrl = buildExternalApiUrl(id, EXTERNAL_API_BASE_URL);
   logger.info(`Attempting fetch from external API: ${externalUrl}`);
 
@@ -81,29 +81,40 @@ async function fetchExternalLyric(
       return { status: 'error', statusCode: 502, error: new Error('External API fallback returned invalid JSON.') };
     }
 
+    // 获取翻译歌词，无论请求格式如何都尝试获取
+    const translationRaw = filterLyricLines(externalData?.tlyric?.lyric);
+    // 将 null 转换为 undefined 以符合类型要求
+    const translation = translationRaw === null ? undefined : translationRaw;
+    logger.info(`Translation lyrics ${translation ? 'found' : 'not found'} in external API response.`);
+
+    // 获取罗马音歌词
+    const romajiRaw = filterLyricLines(externalData?.romalrc?.lyric);
+    const romaji = romajiRaw === null ? undefined : romajiRaw;
+    logger.info(`Romaji lyrics ${romaji ? 'found' : 'not found'} in external API response.`);
+
     // Prioritize specific format if requested
     if (specificFormat === 'yrc') {
       const filteredContent = filterLyricLines(externalData?.yrc?.lyric);
       if (filteredContent) {
         logger.info(`Found and filtered YRC lyrics in external API for ID: ${id}.`);
-        return { status: 'found', format: 'yrc', source: 'external', content: filteredContent };
+        return { status: 'found', format: 'yrc', source: 'external', content: filteredContent, translation, romaji };
       }
     } else if (specificFormat === 'lrc') {
         const filteredContent = filterLyricLines(externalData?.lrc?.lyric);
         if (filteredContent) {
           logger.info(`Found and filtered LRC lyrics in external API for ID: ${id}.`);
-          return { status: 'found', format: 'lrc', source: 'external', content: filteredContent };
+          return { status: 'found', format: 'lrc', source: 'external', content: filteredContent, translation, romaji };
         }
     } else { // No specific format requested, try yrc then lrc
        const filteredYrc = filterLyricLines(externalData?.yrc?.lyric);
        if (filteredYrc) {
          logger.info(`Found and filtered YRC lyrics (default) in external API for ID: ${id}.`);
-         return { status: 'found', format: 'yrc', source: 'external', content: filteredYrc };
+         return { status: 'found', format: 'yrc', source: 'external', content: filteredYrc, translation, romaji };
        }
        const filteredLrc = filterLyricLines(externalData?.lrc?.lyric);
        if (filteredLrc) {
          logger.info(`Found and filtered LRC lyrics (fallback) in external API for ID: ${id}.`);
-         return { status: 'found', format: 'lrc', source: 'external', content: filteredLrc };
+         return { status: 'found', format: 'lrc', source: 'external', content: filteredLrc, translation, romaji };
        }
     }
 
@@ -141,7 +152,15 @@ async function handleFixedVersionSearch(
     logger.info(`LyricService: Fixed ${fixedVersionQuery} not in repo, trying external.`);
     const externalResult = await fetchExternalLyric(id, fixedVersionQuery, logger);
     if (externalResult.status === 'found') {
-      return { found: true, id, format: externalResult.format, source: 'external', content: externalResult.content };
+      return { 
+        found: true, 
+        id, 
+        format: externalResult.format, 
+        source: 'external', 
+        content: externalResult.content,
+        translation: externalResult.translation,
+        romaji: externalResult.romaji
+      };
     }
     if (externalResult.status === 'error') {
       return { found: false, id, error: `External fetch failed for fixed format ${fixedVersionQuery}: ${externalResult.error.message}`, statusCode: externalResult.statusCode };
@@ -224,7 +243,15 @@ async function findInExternalApi(
   logger.info(`LyricService: Trying external API fallback.`);
   const externalResult = await fetchExternalLyric(id, undefined, logger); // undefined -> try yrc, then lrc
   if (externalResult.status === 'found') {
-    return { found: true, id, format: externalResult.format, source: 'external', content: externalResult.content };
+    return { 
+      found: true, 
+      id, 
+      format: externalResult.format, 
+      source: 'external', 
+      content: externalResult.content,
+      translation: externalResult.translation,
+      romaji: externalResult.romaji
+    };
   }
   if (externalResult.status === 'error') {
     return { found: false, id, error: `External API fallback failed: ${externalResult.error.message}`, statusCode: externalResult.statusCode };
