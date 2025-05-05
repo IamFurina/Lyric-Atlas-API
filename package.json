@@ -1,29 +1,15 @@
 {
   "name": "lyric-atlas-api",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "tsx watch --require dotenv/config src/index.ts",
-    "esm:build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=main.js --target=node20",
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "esm:start": "node dist/index.js",
-    "swc:start": "node main.js",
-    "swc:build": "swc src/index.ts -o main.js"
+    "start": "vercel dev",
+    "deploy": "vercel"
   },
   "dependencies": {
     "hono": "^4.7.8"
   },
   "devDependencies": {
-    "@hono/node-server": "^1.14.1",
-    "@swc/cli": "^0.1.65",
-    "@swc/core": "^1.11.22",
-    "@swc/helpers": "^0.5.17",
-    "@types/node": "^20.17.31",
-    "dotenv": "^16.5.0",
-    "esbuild": "^0.23.1",
-    "tsx": "^4.19.3",
-    "typescript": "~5.7.3"
-  }
+    "@types/node": "^22.15.3",
+    "vercel": "^41.7.0"
+  },
+  "packageManager": "pnpm@10.6.2+sha512.47870716bea1572b53df34ad8647b42962bc790ce2bf4562ba0f643237d7302a3d6a8ecef9e4bdfc01d23af1969aa90485d4cebb0b9638fa5ef1daef656f6c1b"
 }
