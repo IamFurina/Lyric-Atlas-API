@@ -6,5 +6,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": true,
+    "lib": ["ESNext", "DOM"],
+    "types": ["node"]
   },
+  "include": ["api/**/*.ts"],
+  "exclude": ["node_modules"]
 }

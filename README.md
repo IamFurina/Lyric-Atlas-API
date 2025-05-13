@@ -8,8 +8,7 @@
 *   当 TTML 未找到时，按顺序查找仓库中的 `yrc`, `lrc`, `eslrc` 格式（可通过 `fallback` 参数自定义顺序）。
 *   当仓库中所有格式都未找到时，回退到外部 API (通过 `EXTERNAL_NCM_API_URL` 环境变量配置) 获取 `yrc` 或 `lrc`。(外部 API 为 NeteaseCloudMusicApi)
 *   支持通过 `fixedVersion` 参数强制只查找仓库中的特定格式。
-*   使用 [Fastify](https://www.fastify.io/) 构建，性能高效。
-*   开发模式下使用 [tsx](https://github.com/esbuild-kit/tsx) 实现热重载。
+*   使用 [Hono](https://www.hono.dev/) 构建，性能高效。
 
 ## API 端点
 
@@ -62,6 +61,53 @@
 *   `GET /api/search?id=449818741&fallback=lrc,yrc` (查找顺序: ttml -> lrc -> yrc -> external)
 *   `GET /api/search?id=449818741&fixedVersion=ttml` (只查找仓库中的 ttml)
 
+### `GET /api/lyrics/meta`
+
+快速检查某个歌曲 ID 是否存在歌词，并返回可用的歌词格式列表以及是否有翻译或罗马音（来自外部 API）。此端点不返回完整的歌词内容，设计用于轻量级检查。
+
+**查询参数:**
+
+*   `id` ( **必需** ): 网易云音乐歌曲的数字 ID。
+
+**响应:**
+
+*   **成功 (200 OK):**
+    ```json
+    {
+      "found": true,
+      "id": "歌曲ID",
+      "availableFormats": ["ttml", "lrc"], // 可能的格式列表 (LyricFormat[])
+      "hasTranslation": true, // 布尔值，指示外部 API 是否提供翻译
+      "hasRomaji": false      // 布尔值，指示外部 API 是否提供罗马音
+    }
+    ```
+*   **未找到 (404 Not Found):**
+    ```json
+    {
+      "found": false,
+      "id": "歌曲ID",
+      "error": "错误信息 (例如 'No lyric formats found')"
+    }
+    ```
+*   **客户端错误 (400 Bad Request):**
+    ```json
+    {
+      "found": false, // 注意：为了与 search 保持一致性，这里也返回 found: false
+      "error": "错误信息 (例如 'Missing id parameter')"
+    }
+    ```
+*   **服务器错误 (5xx):**
+    ```json
+    {
+      "found": false,
+      "error": "错误信息"
+    }
+    ```
+
+**示例请求:**
+
+*   `GET /api/lyrics/meta?id=449818741`
+
 ## 数据来源
 
 1.  **主要来源:** [Steve-XMH/amll-ttml-db](https://github.com/Steve-XMH/amll-ttml-db) GitHub 仓库 (`/ncm-lyrics` 目录)。
@@ -105,7 +151,7 @@
 
 ## 环境变量
 
-*   `EXTERNAL_NCM_API_URL` ( **必需** ): 指定外部回退 NCM API 的基础 URL (例如: `https://ncm-api.prod.gbclstudio.cn/lyric/new`)。服务器在启动时会检查此变量。
+*   `EXTERNAL_NCM_API_URL` ( **必需** ): 指定外部回退 NCM API 的基础 URL (例如: `https://ncm-api/lyric/new`)。服务器在启动时会检查此变量。
 *   `PORT`: 指定服务器监听的端口 (默认: `3000`)。
 
 ## 部署
@@ -114,4 +160,4 @@
 
 ## 许可证
 
-(建议添加一个许可证文件，例如 MIT License)
+GNU GENERAL PUBLIC LICENSE v3.

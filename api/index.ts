@@ -2,16 +2,27 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { handle } from 'hono/vercel';
 import { cors } from 'hono/cors';
-import { LyricProvider, type SearchResult } from './lyricService';
+import { LyricProvider, type SearchResult, searchLyrics, getLyricMetadata, LyricMetadataResult } from './lyricService';
 import { getLogger } from './utils';
-import { prettyJSON } from 'hono/pretty-json'
+import { prettyJSON } from 'hono/pretty-json';
+import { setupCacheCleanup } from './cache';
 
 // Create a logger instance for the API entrypoint
 const apiLogger = getLogger('API');
 
+// 显式声明Edge Runtime
+export const runtime = 'edge';
+
+// 配置最接近的边缘区域
+export const preferredRegion = 'auto';
+
+// 设置最大并发
 export const config = {
   runtime: 'edge'
 }
+
+// 启动缓存清理
+setupCacheCleanup();
 
 // --- App Setup ---
 // Remove the Env type parameter from Hono
@@ -39,6 +50,16 @@ function getExternalApiBaseUrl(): string | undefined {
   }
   return url;
 }
+
+// Define consoleLoggerShim if it's not already available globally or via import
+// This shim is passed to the lyric service functions.
+const consoleLoggerShim = {
+    info: (...args: any[]) => apiLogger.info(...args),
+    warn: (...args: any[]) => apiLogger.warn(...args),
+    error: (...args: any[]) => apiLogger.error(...args),
+    debug: (...args: any[]) => apiLogger.debug(...args),
+    // Ensure this structure matches the BasicLogger interface expected by your lyricService
+};
 
 // --- Routes ---
 
@@ -98,6 +119,41 @@ app.get('/search', async (c: Context) => {
     apiLogger.error(`Unexpected error during search for ID: ${id} - ${errorMessage}`, error);
     c.status(500);
     return c.json({ found: false, id, error: `Failed to process lyric request: ${errorMessage}` });
+  }
+});
+
+// --- API Endpoint: /api/lyrics/meta ---
+app.get('/lyrics/meta', async (c) => {
+  const id = c.req.query('id');
+  // EXTERNAL_API_BASE_URL check can remain if desired, or be handled solely by the service
+
+  if (!id) {
+    c.status(400);
+    return c.json({ found: false, error: 'Missing id parameter' });
+  }
+
+  apiLogger.info(`Received metadata request for ID: ${id}`);
+
+  try {
+    const result: LyricMetadataResult = await getLyricMetadata(id, {
+      logger: consoleLoggerShim 
+    });
+
+    if (result.found) {
+      apiLogger.info(`Found metadata for ID: ${id}, Formats: ${result.availableFormats.join(', ')}`);
+      return c.json(result);
+    } else {
+      const statusCode = result.statusCode || 404;
+      apiLogger.warn(`Metadata not found or error for ID: ${id}. Status: ${statusCode}, Error: ${result.error}`);
+      c.status(statusCode as any); 
+      return c.json(result);
+    }
+
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    apiLogger.error({ msg: `Unexpected error during API metadata handler for ID: ${id}`, error: err.message, stack: err.stack });
+    c.status(500);
+    return c.json({ found: false, id, error: `Failed to process lyric metadata request: ${err.message}` });
   }
 });
 
